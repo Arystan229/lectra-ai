@@ -6,6 +6,7 @@ import json
 import math
 import subprocess
 import tempfile
+import time
 import wave
 from pathlib import Path
 from typing import Annotated
@@ -23,7 +24,7 @@ from pptx.util import Inches, Pt
 
 st.set_page_config(page_title="LECTRA — учебный блокнот", layout="wide", initial_sidebar_state="collapsed")
 
-MODEL = "gemini-3.8-flash"
+MODEL = "gemini-3.1-flash-lite"
 CHUNK_SECONDS = 300
 MAX_BYTES = 450 * 1024 * 1024
 MAX_SECONDS = 4 * 3600
@@ -141,11 +142,19 @@ def ask_json(client, prompt, schema, audio=None):
     contents = [prompt]
     if audio is not None:
         contents.append(types.Part.from_bytes(data=audio, mime_type="audio/wav"))
-    response = client.models.generate_content(
-        model=MODEL, contents=contents,
-        config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=schema,
-                                          max_output_tokens=16384),
-    )
+    for attempt in range(3):
+        try:
+            response = client.models.generate_content(
+                model=MODEL, contents=contents,
+                config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=schema,
+                                                  max_output_tokens=16384),
+            )
+            break
+        except Exception as error:
+            # Retry only temporary server failures, not keys, quotas or invalid input.
+            if str(getattr(error, "code", "")) not in {"500", "502", "503", "504"} or attempt == 2:
+                raise
+            time.sleep(2 ** (attempt + 1))
     if not response.text:
         raise ValueError("Gemini вернул пустой ответ. Попробуй снова.")
     return schema.model_validate_json(response.text).model_dump()
@@ -232,7 +241,7 @@ def explain_error(error, stage):
     if code == "403" or "permission_denied" in message:
         return "Gemini отказал в доступе. Проверь ограничения ключа, доступ к модели и проекту в Google AI Studio.", diagnostic
     if code == "404":
-        return "Модель недоступна этому проекту. Проверь доступ к gemini-3.8-flash в Google AI Studio.", diagnostic
+        return f"Модель недоступна этому проекту. Проверь доступ к {MODEL} в Google AI Studio.", diagnostic
     if isinstance(error, ValidationError):
         fields = [".".join(map(str, item["loc"])) for item in error.errors(include_input=False, include_url=False)[:3]]
         return "Ответ AI неполный или не соответствует формату. Повтори обработку: готовые части не отправятся заново.", diagnostic + " Поля: " + ", ".join(fields)
