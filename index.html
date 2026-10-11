@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LECTRA</title><link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app" class="app">
+  <aside id="sidebar" class="sidebar">
+    <div class="brand">LECTRA <span>NOTEBOOK</span></div><button id="closeNavigation" class="side-close icon-button" data-label="navigation" data-icon="menu"></button>
+    <button id="newLecture" class="primary full" data-i18n="newLecture"></button>
+    <label class="search"><span data-icon="search"></span><input id="searchLectures" data-placeholder="searchLectures"></label>
+    <div class="side-label" data-i18n="subjects"></div><div id="folders"></div>
+    <button id="newFolder" class="quiet full" data-i18n="newFolder"></button>
+    <div class="side-label" data-i18n="lectures"></div><nav id="lectureList"></nav>
+    <div class="side-footer"><span id="keyState"></span><p data-i18n="localOnly"></p><button id="backup" class="quiet" data-i18n="backup"></button><button id="restore" class="quiet" data-i18n="restore"></button><input id="restoreFile" type="file" accept="application/json" hidden></div>
+  </aside>
+  <main>
+    <header class="topbar"><button id="toggleNav" class="icon-button" data-label="navigation" data-icon="menu"></button><span class="crumb" data-i18n="workspace"></span><div class="top-actions"><label class="interface-language"><span data-i18n="interfaceLanguage"></span><select id="uiLanguage"><option value="ru">Русский</option><option value="en">English</option><option value="zh">中文</option></select></label><details id="downloads"><summary data-i18n="download"></summary><div id="downloadItems" class="dropdown"></div></details></div></header>
+    <div class="page">
+      <div id="notice" class="notice" role="status" hidden></div>
+      <div class="document-heading"><input id="lectureTitle" class="title-input" data-placeholder="newLecture" aria-label="Название лекции"><span id="saveState" class="save-state" role="status"></span></div>
+      <div class="preferences"><label><span data-i18n="subject"></span><select id="subject"></select></label><label><span data-i18n="originalLanguage"></span><select id="originalLanguage"></select></label><label><span data-i18n="materialsLanguage"></span><select id="materialsLanguage"></select></label></div>
+      <section class="recording-panel" aria-label="Audio">
+        <div class="record-actions"><button id="startRecording" class="primary"><span data-icon="mic"></span><span data-i18n="start"></span></button><button id="uploadAudio" class="secondary"><span data-icon="upload"></span><span data-i18n="uploadAudio"></span></button><input id="audioFile" type="file" accept="audio/*,.mp4,.webm" hidden><span id="recordStatus" class="record-status"></span><strong id="timer" class="timer" hidden>00:00</strong><meter id="level" min="0" max="1" value="0" hidden></meter></div>
+        <div id="recordControls" class="record-controls" hidden><button id="pauseRecording" class="secondary" data-i18n="pause"></button><button id="stopRecording" class="primary" data-i18n="finish"></button><button id="markTime" class="quiet" data-i18n="mark"></button><button id="confusedTime" class="quiet" data-i18n="confused"></button></div>
+        <div id="audioArea" hidden><audio id="audioPlayer" controls preload="metadata"></audio><div class="audio-actions"><span id="audioName"></span><button id="analyze" class="primary" data-i18n="analyze"></button></div></div>
+        <p class="hint" data-i18n="recordHint"></p><p id="microphoneError" class="error" role="alert" hidden></p>
+      </section>
+      <div class="viewbar"><div class="view-tabs" role="tablist"><button data-view="notes" data-i18n="myNotes"></button><button data-view="materials" data-i18n="lectureMaterials"></button><button data-view="final" data-i18n="finalNotes"></button></div><button id="splitView" class="quiet" data-i18n="sideBySide"></button></div>
+      <div id="workspace" class="workspace">
+        <section id="notesPane" class="document-pane"><div class="document-tools"><h2 id="noteHeading" data-i18n="myNotes"></h2><div class="toolbar" role="toolbar"><button data-format="bold" title="Ctrl+B"><b>B</b></button><button data-format="italic" title="Ctrl+I"><i>I</i></button><button data-format="formatBlock" data-value="h2">H2</button><button data-format="insertUnorderedList" data-icon="list" data-label="bullets"></button><button data-format="insertOrderedList">1.</button><button id="checklist" data-icon="check" data-label="checklist"></button><button data-format="hiliteColor" data-value="#FFF0B5" data-icon="highlight" data-label="highlight"></button><button id="insertLink" data-icon="link" data-label="link"></button><button data-format="formatBlock" data-value="blockquote" data-icon="quote" data-label="quote"></button><button id="insertImage" data-icon="image" data-label="image"></button><button data-format="undo" data-icon="undo" data-label="undo"></button><button data-format="redo" data-icon="redo" data-label="redo"></button><button id="addDrawing" data-icon="pen" data-label="addDrawing"></button></div><input id="imageFile" type="file" accept="image/*" hidden></div><div id="noteBlocks"></div><button id="addText" class="quiet" data-i18n="addText"></button></section>
+        <section id="materialsPane" class="document-pane" hidden><div class="material-tabs"><button data-material="summary" data-i18n="summary"></button><button data-material="transcript" data-i18n="transcript"></button><button data-material="quiz" data-i18n="quiz"></button></div><div id="materialContent"></div></section>
+        <section id="finalPane" class="document-pane" hidden><div class="final-actions"><h2 data-i18n="finalNotes"></h2><button id="buildFinal" class="primary" data-i18n="buildFinal"></button></div><p class="hint" data-i18n="mergeHint"></p><div id="draftPreview" hidden></div><div id="finalBlocks"></div></section>
+      </div>
+      <footer class="page-footer"><span data-i18n="localOnly"></span><span data-i18n="privacy"></span></footer>
+    </div>
+  </main>
+</div>
+<dialog id="drawingDialog"><div class="drawing-header"><h2 data-i18n="drawing"></h2><button id="closeDrawing" data-i18n="done"></button></div><div class="drawing-toolbar"><button data-tool="pen" data-i18n="pen"></button><button data-tool="marker" data-i18n="marker"></button><button data-tool="eraser" data-i18n="eraser"></button><button data-tool="move" data-i18n="move"></button><input id="inkColor" type="color" value="#315c9b" aria-label="Цвет"><select id="inkWidth"><option value="2">2 px</option><option value="4" selected>4 px</option><option value="8">8 px</option><option value="14">14 px</option></select><button id="drawUndo" data-icon="undo" data-label="undo"></button><button id="drawRedo" data-icon="redo" data-label="redo"></button><button id="drawClear" data-i18n="clear"></button></div><canvas id="drawCanvas" width="1000" height="650"></canvas><p class="hint" data-i18n="drawingHint"></p></dialog>
+<script src="app.js"></script>
+</body></html>
