@@ -14,7 +14,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 from google import genai
 from google.genai import types
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.util import Inches, Pt
@@ -25,7 +25,7 @@ MODEL = "gemini-3.8-flash"
 CHUNK_SECONDS = 300
 MAX_BYTES = 450 * 1024 * 1024
 MAX_SECONDS = 4 * 3600
-LANGUAGES = {"Русский": "Russian", "English": "English", "Қазақша": "Kazakh", "中文": "Chinese", "Español": "Spanish", "Français": "French", "Deutsch": "German", "日本語": "Japanese"}
+LANGUAGES = {"Русский": "Russian", "English — английский": "English", "中文 — китайский": "Chinese"}
 
 
 class Paragraph(BaseModel):
@@ -174,17 +174,21 @@ def process(upload, original, target, job_id):
     if not job or job["id"] != job_id:
         job = {"id": job_id, "chunks": [], "duration": 0, "total": 0}
         st.session_state["job"] = job
+    job["stage"] = "Подключение к Gemini"
     with genai.Client(api_key=api_key()) as client:
         with st.status("Готовлю запись…", expanded=True) as status:
+            job["stage"] = "Подготовка аудио"
             progress = st.progress(0)
             for index, total, duration, chunk in audio_chunks(upload):
                 job.update(duration=duration, total=total)
                 if index >= len(job["chunks"]):
+                    job["stage"] = f"Распознавание части {index + 1} из {total}"
                     status.update(label=f"Слушаю и перевожу часть {index + 1} из {total}")
                     st.write(f"{clock_label(index * CHUNK_SECONDS)} — {clock_label(min((index + 1) * CHUNK_SECONDS, duration))}")
                     job["chunks"].append(transcribe_chunk(client, chunk, original, target, index))
                 progress.progress((index + 1) / total)
             status.update(label="Собираю конспект, определения, презентацию и тест…")
+            job["stage"] = "Создание учебных материалов"
             pack = summarize(client, job["chunks"], target)
             pack.update(chunks=job["chunks"], duration=job["duration"], total=job["total"],
                         original_language=original, target_language=target, demo=False, id=job_id)
@@ -194,6 +198,39 @@ def process(upload, original, target, job_id):
                 if key.startswith("answer_"):
                     del st.session_state[key]
             status.update(label="Готово — твоя лекция разобрана", state="complete", expanded=False)
+            job["stage"] = "Готово"
+
+
+def explain_error(error, stage):
+    """Show useful diagnostics without exposing keys, audio, or provider request data."""
+    raw_code = getattr(error, "code", None)
+    code = str(raw_code) if str(raw_code).isdigit() else ""
+    message = str(error).lower()
+    diagnostic = f"Этап: {stage}. Тип: {type(error).__name__}."
+    if code:
+        diagnostic += f" Код: {code}."
+    if code == "429" or "resource_exhausted" in message:
+        return "Достигнут лимит Gemini. Если ограничение минутное — повтори позже; если суточное — дождись сброса квоты. Готовые части сохранены в этой сессии.", diagnostic
+    if "api_key_invalid" in message or "api key not valid" in message or code == "401":
+        return "Gemini не принимает API-ключ. Проверь GEMINI_API_KEY в Streamlit → Settings → Secrets и сохрани действующий ключ.", diagnostic
+    if code == "403" or "permission_denied" in message:
+        return "Gemini отказал в доступе. Проверь ограничения ключа, доступ к модели и проекту в Google AI Studio.", diagnostic
+    if code == "404":
+        return "Модель недоступна этому проекту. Проверь доступ к gemini-3.8-flash в Google AI Studio.", diagnostic
+    if isinstance(error, ValidationError):
+        fields = [".".join(map(str, item["loc"])) for item in error.errors(include_input=False, include_url=False)[:3]]
+        return "Ответ AI неполный или не соответствует формату. Повтори обработку: готовые части не отправятся заново.", diagnostic + " Поля: " + ", ".join(fields)
+    if isinstance(error, subprocess.TimeoutExpired):
+        return "Подготовка аудио заняла слишком много времени. Попробуй более короткий файл или MP3.", diagnostic
+    if isinstance(error, (FileNotFoundError, PermissionError, OSError)) and stage == "Подготовка аудио":
+        return "Не удалось подготовить аудио на сервере. Проверь наличие imageio-ffmpeg в requirements.txt и попробуй короткий WAV-файл.", diagnostic
+    if code == "400":
+        return "Gemini отклонил запрос. Возможны ограничения модели, аудио или формата ответа. Нужна диагностика по коду и этапу ниже.", diagnostic
+    if code in {"500", "502", "503", "504"}:
+        return "Сервис Gemini временно недоступен. Повтори попытку позже.", diagnostic
+    if isinstance(error, ValueError) and stage == "Подготовка аудио":
+        return str(error), diagnostic
+    return "Обработка прервалась. Нажми «Продолжить обработку». Если ошибка повторяется, пришли диагностическую строку ниже.", diagnostic
 
 
 def transcript_text(chunks, translated=False):
@@ -293,7 +330,7 @@ with st.sidebar:
     st.caption("Выбери языки перед началом записи.")
     st.divider()
     has_key = bool(api_key())
-    st.success("AI подключён") if has_key else st.info("Пока доступен пример. Для твоей лекции нужен ключ Gemini.")
+    st.info("Ключ сохранён · доступ проверится при обработке") if has_key else st.info("Пока доступен пример. Для твоей лекции нужен ключ Gemini.")
     with st.expander("Как подключить AI"):
         st.write('Streamlit → Settings → Secrets:')
         st.code('GEMINI_API_KEY = "твой-ключ"', language="toml")
@@ -332,17 +369,11 @@ if audio:
         try:
             process(audio, original, target, job_id)
         except Exception as error:
-            code = getattr(error, "code", None)
-            if str(code) == "429":
-                st.error("Квота Gemini закончилась. Готовые части сохранены в этой сессии. После восстановления квоты нажми «Продолжить обработку».")
-            elif str(code) in {"401", "403"}:
-                st.error("Проверь API-ключ и доступ к модели в Google AI Studio.")
-            elif str(code) == "404":
-                st.error("Модель недоступна этому аккаунту. Проверь доступ к gemini-3.8-flash.")
-            else:
-                st.error("Не удалось завершить обработку. Можно повторить попытку; готовые части не отправляются заново.")
-                if isinstance(error, ValueError) and not error.__class__.__module__.startswith("pydantic"):
-                    st.caption(str(error))
+            job = st.session_state.get("job", {})
+            stage = job.get("stage", "Начало обработки") if job.get("id") == job_id else "Начало обработки"
+            explanation, diagnostic = explain_error(error, stage)
+            st.error(explanation)
+            st.caption(diagnostic)
             st.session_state["processing_failed"] = job_id
     job = st.session_state.get("job", {})
     if job.get("id") == job_id and job.get("chunks") and st.session_state.get("pack", {}).get("id") != job_id:
