@@ -323,12 +323,6 @@ with st.sidebar:
     st.header("🎓 LECTRA")
     st.caption("Лекция → понимание")
     st.divider()
-    original_label = st.selectbox("На каком языке говорит лектор?", ["Определить автоматически"] + list(LANGUAGES))
-    target_label = st.selectbox("На каком языке тебе удобно учиться?", list(LANGUAGES))
-    original = LANGUAGES.get(original_label, "Auto-detect")
-    target = LANGUAGES[target_label]
-    st.caption("Выбери языки перед началом записи.")
-    st.divider()
     has_key = bool(api_key())
     st.info("Ключ сохранён · доступ проверится при обработке") if has_key else st.info("Пока доступен пример. Для твоей лекции нужен ключ Gemini.")
     with st.expander("Как подключить AI"):
@@ -337,6 +331,18 @@ with st.sidebar:
         st.caption("Не добавляй ключ в GitHub.")
 
 st.markdown('<div class="hero"><div class="eyebrow">LECTRA · УЧИСЬ НА СВОЁМ ЯЗЫКЕ</div><h1>Ты слушаешь.<br>LECTRA помогает понять.</h1><p>Запиши лекцию и получи полный текст, перевод, понятный конспект и презентацию — в одном месте.</p></div>', unsafe_allow_html=True)
+
+with st.container(border=True):
+    st.subheader("Выбери языки")
+    language_left, language_right = st.columns(2)
+    with language_left:
+        original_label = st.selectbox("Язык лектора", ["Определить автоматически"] + list(LANGUAGES), key="original_language_choice")
+    with language_right:
+        target_label = st.selectbox("Язык перевода и учебных материалов", list(LANGUAGES), key="target_language_choice")
+    original = LANGUAGES.get(original_label, "Auto-detect")
+    target = LANGUAGES[target_label]
+    st.caption("Английский · Китайский · Русский. Оригинал сохраняется, а перевод, конспект, определения, презентация и тест будут на выбранном языке.")
+    st.caption("Выбери языки перед записью. Чтобы изменить язык уже готовых материалов, выбери новый и нажми «Создать материалы» — это использует API-квоту.")
 
 record_tab, upload_tab = st.tabs(["🎙 Записать лекцию", "📁 Загрузить запись"])
 with record_tab:
