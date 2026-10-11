@@ -19,8 +19,8 @@ h1, h2, h3 { color: #f3f4f6; }
 </style>
 """, unsafe_allow_html=True)
 
-MODELS = ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-2.5-flash"]
-MAX_BYTES = 15 * 1024 * 1024
+MODELS = ["gemini-3.8-flash"]
+MAX_BYTES = 10 * 1024 * 1024
 
 DEMO_DATA = {
   "title": "Demo: Photosynthesis Basics (示例)",
@@ -44,19 +44,62 @@ with st.sidebar:
     output_language = st.selectbox("Language of study materials", ["Russian", "English", "Kazakh", "Chinese", "Spanish", "French"])
     lecture_language = st.selectbox("Original lecture language", ["Chinese", "English", "Russian", "Kazakh", "Spanish", "French", "German", "Japanese", "Other / auto-detect"])
     st.caption("MVP: uploaded audio, not live recording.")
-    st.caption("Maximum upload size: 15 MB.")
+    st.caption("Maximum upload size: 10 MB.")
 
 audio = st.file_uploader("Upload a short lecture", type=["mp3", "wav", "m4a", "aac", "ogg", "flac"])
+
+def reset_quiz_answers():
+    for key in list(st.session_state):
+        if key.startswith("quiz_"):
+            del st.session_state[key]
+
+
+def validate_data(data):
+    if not isinstance(data, dict):
+        raise ValueError("Expected a JSON object.")
+    for key in ("title", "transcript", "translation", "summary"):
+        if not isinstance(data.get(key), str) or not data[key].strip():
+            raise ValueError(f"Missing or invalid field: {key}")
+    for key in ("notes", "further_topics"):
+        if not isinstance(data.get(key), list) or not all(isinstance(x, str) for x in data[key]):
+            raise ValueError(f"Invalid list: {key}")
+    for key in ("key_terms", "slides", "quiz"):
+        if not isinstance(data.get(key), list):
+            raise ValueError(f"Invalid list: {key}")
+    for item in data["key_terms"]:
+        if not isinstance(item, dict) or not all(isinstance(item.get(k), str) for k in ("term", "definition")):
+            raise ValueError("Invalid key term.")
+    if not 4 <= len(data["slides"]) <= 8:
+        raise ValueError("Expected 4 to 8 slides.")
+    for item in data["slides"]:
+        if not isinstance(item, dict) or not isinstance(item.get("title"), str):
+            raise ValueError("Invalid slide.")
+        points = item.get("points")
+        if not isinstance(points, list) or not points or not all(isinstance(x, str) for x in points):
+            raise ValueError("Invalid slide points.")
+    if not 3 <= len(data["quiz"]) <= 5:
+        raise ValueError("Expected 3 to 5 quiz questions.")
+    for item in data["quiz"]:
+        if not isinstance(item, dict) or not all(isinstance(item.get(k), str) for k in ("question", "explanation")):
+            raise ValueError("Invalid quiz question.")
+        options = item.get("options")
+        if not isinstance(options, list) or len(options) != 4 or not all(isinstance(x, str) and x.strip() for x in options):
+            raise ValueError("Expected four nonempty quiz options.")
+        if type(item.get("answer")) is not int or not 0 <= item["answer"] < 4:
+            raise ValueError("Invalid correct answer.")
+    return data
+
 
 col_demo, col_info = st.columns([1, 2])
 with col_demo:
     if st.button("🚀 Try DEMO without key"):
+        reset_quiz_answers()
         st.session_state["lecture_data"] = DEMO_DATA
         st.session_state["lecture_name"] = "demo"
         st.success("Demo loaded! No API key needed.")
         st.rerun()
 with col_info:
-    st.caption("No Gemini key? Click DEMO — judges will still see full app working.")
+    st.caption("DEMO uses a fixed sample; it does not process your audio or follow language preferences.")
 
 def get_api_key():
     try:
@@ -121,10 +164,10 @@ Requirements:
     last_err = None
     for model in MODELS:
         try:
-            response = client.models.generate_content(model=model, contents=[prompt, audio_part])
+            response = client.models.generate_content(model=model, contents=[prompt, audio_part], config=types.GenerateContentConfig(response_mime_type="application/json"))
             if not response.text:
                 raise ValueError(f"Empty response from {model}")
-            return parse_json(response.text), model
+            return validate_data(parse_json(response.text)), model
         except Exception as e:
             msg = str(e)
             last_err = e
@@ -133,12 +176,12 @@ Requirements:
             raise
     raise last_err
 
-mime_types = {"mp3": "audio/mpeg", "wav": "audio/wav", "m4a": "audio/mp4", "aac": "audio/aac", "ogg": "audio/ogg", "flac": "audio/flac"}
+mime_types = {"mp3": "audio/mpeg", "wav": "audio/wav", "m4a": "audio/m4a", "aac": "audio/aac", "ogg": "audio/ogg", "flac": "audio/flac"}
 
 if audio:
     st.audio(audio)
     if len(audio.getvalue()) > MAX_BYTES:
-        st.error("This demo accepts files up to 15 MB. Please use a shorter recording.")
+        st.error("This demo accepts files up to 10 MB. Please use a shorter recording.")
         st.stop()
     st.caption(f"File: {audio.name} · {len(audio.getvalue()) / 1024:.0f} KB")
     if st.button("✨ Generate Learning Pack", type="primary", use_container_width=True):
@@ -155,6 +198,7 @@ if audio:
                 client = genai.Client(api_key=api_key)
                 with st.spinner("Listening, translating and building your study pack..."):
                     data, used_model = analyze_audio(audio.getvalue(), mime_type, lecture_language, output_language, client)
+                reset_quiz_answers()
                 st.session_state["lecture_data"] = data
                 st.session_state["lecture_name"] = audio.name
                 st.success(f"Your learning pack is ready! (model: {used_model})")
@@ -217,7 +261,7 @@ if data:
                 score = 0
                 for i, question in enumerate(quiz):
                     correct = question.get("answer")
-                    valid = isinstance(correct, int) and 0 <= correct < 4
+                    valid = type(correct) is int and 0 <= correct < len(question.get("options", []))
                     is_correct = valid and answers[i] == correct
                     if is_correct:
                         score += 1
