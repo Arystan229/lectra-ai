@@ -27,6 +27,7 @@ function wav(seconds=1){
     const element=page.locator('iframe').first();await element.waitFor({timeout:30000});
     const frame=await (await element.elementHandle()).contentFrame();
     await frame.waitForFunction(()=>document.querySelector('#saveState')?.textContent.includes('Сохранено'));
+    await frame.waitForFunction(()=>window.Product?.initialized);await frame.evaluate(()=>Product.open('notebook','notes'));
     await frame.waitForFunction(()=>innerWidth>1000);
     await page.screenshot({path:path.join(temp,'desktop-initial.png'),fullPage:true});
     await frame.locator('.editor').first().fill('Мои заметки сохраняются при загрузке аудио.');
@@ -111,6 +112,7 @@ function wav(seconds=1){
     await frame.waitForFunction(()=>document.querySelector('#audioStatus').textContent.includes('готово'));
     await page.reload();await page.locator('iframe').first().waitFor();
     const frame2=await (await page.locator('iframe').first().elementHandle()).contentFrame();
+    await frame2.waitForFunction(()=>window.Product?.initialized);await frame2.evaluate(()=>Product.open('notebook','notes'));
     await frame2.locator('#downloadAudio').waitFor({state:'visible'});
     assert((await frame2.locator('.editor').first().innerText()).includes('Мои заметки'));
     await frame2.locator('#startRecording').click();

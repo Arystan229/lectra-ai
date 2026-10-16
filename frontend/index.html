@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>LECTRA</title><link rel="stylesheet" href="style.css">
+<title>LECTRA</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="product.css">
 </head>
 <body>
 <a class="skip-link" href="#noteHeading">К заметкам</a>
@@ -44,4 +44,5 @@
 <dialog id="drawingDialog" aria-labelledby="drawingTitle"><div class="drawing-header"><h2 id="drawingTitle" data-i18n="drawing"></h2><button id="closeDrawing" data-i18n="done"></button></div><div class="drawing-toolbar"><button data-tool="pen" data-i18n="pen"></button><button data-tool="marker" data-i18n="marker"></button><button data-tool="eraser" data-i18n="eraser"></button><button data-tool="move" data-i18n="move"></button><button data-tool="pan" data-i18n="navigateCanvas"></button><input id="inkColor" type="color" value="#315c9b" aria-label="Цвет"><select id="inkWidth"><option value="2">2 px</option><option value="4" selected>4 px</option><option value="8">8 px</option><option value="14">14 px</option></select><button id="drawUndo" data-icon="undo" data-label="undo"></button><button id="drawRedo" data-icon="redo" data-label="redo"></button><button id="drawClear" data-i18n="clear"></button></div><label class="touch-setting"><input id="fingerDrawing" type="checkbox" checked><span data-i18n="fingerDrawing"></span></label><div class="canvas-surface"><canvas id="drawCanvas" width="1000" height="650"></canvas></div><p class="hint" data-i18n="drawingHint"></p></dialog>
 <script src="notebook-ui.js"></script>
 <script src="app.js"></script>
+<script src="product.js"></script>
 </body></html>

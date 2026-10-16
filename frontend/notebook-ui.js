@@ -28,7 +28,7 @@ function closeNotebookNavigation(restoreFocus=true){
 }
 function initNotebookUI(){
   Object.assign(translations.ru,{
-    backupReady:'Копия подготовлена, включая последние изменения. Скачай её на устройство.',downloadBackup:'Скачать резервную копию',checkItem:'Новая задача',keyMissing:'Анализ недоступен: ключ AI не настроен.',importHelp:'Форматы и помощь с загрузкой',personalSpace:'Личный конспект',bold:'Жирный · Ctrl+B',italic:'Курсив · Ctrl+I',numbered:'Нумерованный список',
+    sourceDocument:'Источник: документ',backupReady:'Копия подготовлена, включая последние изменения. Скачай её на устройство.',downloadBackup:'Скачать резервную копию',checkItem:'Новая задача',keyMissing:'Анализ недоступен: ключ AI не настроен.',importHelp:'Форматы и помощь с загрузкой',personalSpace:'Личный конспект',bold:'Жирный · Ctrl+B',italic:'Курсив · Ctrl+I',numbered:'Нумерованный список',
     addedToNotes:'Фрагмент добавлен в «Мои заметки». Его можно редактировать.',afterBlock:'После блока',materialsEmptyTitle:'Разберём лекцию по полочкам',
     navigateCanvas:'Прокрутка',fingerDrawing:'Рисовать пальцем',
     drawingHint:'«Перемещать» — выбрать и перетащить штрих. «Прокрутка» — двигать страницу без рисования. После касания стилусом рисование пальцем отключается; его можно включить снова.',

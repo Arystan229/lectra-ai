@@ -10,7 +10,7 @@ const path=require('node:path');
   const page=await context.newPage(),errors=[];page.setDefaultTimeout(20000);
   page.on('pageerror',error=>errors.push(error.message));page.on('dialog',dialog=>dialog.accept());
   const artifacts=process.env.ARTIFACT_DIR||path.resolve('test-results/notebook');await fs.mkdir(artifacts,{recursive:true});
-  async function open(){await page.goto(process.env.TEST_URL||'http://127.0.0.1:8501');const iframe=page.locator('iframe').first();await iframe.waitFor({timeout:30000});const frame=await(await iframe.elementHandle()).contentFrame();await frame.locator('#saveState[data-state="saved"]').waitFor();return frame}
+  async function open(){await page.goto(process.env.TEST_URL||'http://127.0.0.1:8501');const iframe=page.locator('iframe').first();await iframe.waitFor({timeout:30000});const frame=await(await iframe.elementHandle()).contentFrame();await frame.waitForFunction(()=>window.Product?.initialized);await frame.evaluate(()=>Product.open('notebook','notes'));await frame.locator('#saveState[data-state="saved"]').waitFor();return frame}
   async function saved(frame){await frame.waitForFunction(()=>!unsaved&&saveStatus==='saved')}
   async function noOverflow(frame){assert(await frame.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'page has horizontal overflow')}
   try{
@@ -26,7 +26,7 @@ const path=require('node:path');
     await saved(frame);
     assert(await frame.locator('.editor').first().evaluate(el=>!!el.querySelector('b,strong')));
     assert(await frame.locator('.editor').first().evaluate(el=>!!el.querySelector('[style*="background-color"]')));
-    console.log('Reloading saved notebook');await page.reload();frame=await(await page.locator('iframe').first().elementHandle()).contentFrame();await frame.locator('#saveState[data-state="saved"]').waitFor();
+    console.log('Reloading saved notebook');await page.reload();await page.locator('iframe').first().waitFor();frame=await(await page.locator('iframe').first().elementHandle()).contentFrame();await frame.waitForFunction(()=>window.Product?.initialized);await frame.evaluate(()=>Product.open('notebook','notes'));await frame.locator('#saveState[data-state="saved"]').waitFor();
     assert(await frame.locator('.editor').first().evaluate(el=>!!el.querySelector('[style*="background-color"]')),'highlight survives reload');
     assert(!(await frame.evaluate(()=>sanitize('<img src=x onerror="alert(1)"><script>alert(1)</script><span style="position:fixed;background-color:rgb(255,240,181)">text</span>'))).includes('onerror'));
     console.log('Marker restored');await frame.locator('#addText').click();await frame.locator('.editor').nth(1).fill('Проверить перед экзаменом');
@@ -48,7 +48,7 @@ const path=require('node:path');
     await page.mouse.move(rect.x+rect.width*.4,rect.y+rect.height*.2);await page.mouse.down();await page.mouse.move(rect.x+rect.width*.6,rect.y+rect.height*.2,{steps:5});await page.mouse.up();
     assert.deepEqual(await frame.evaluate(()=>drawingBlock.strokes),original,'navigation must not draw');
     await frame.locator('#closeDrawing').click();await saved(frame);
-    console.log('Reloading saved notebook');await page.reload();frame=await(await page.locator('iframe').first().elementHandle()).contentFrame();await frame.locator('#saveState[data-state="saved"]').waitFor();
+    console.log('Reloading saved notebook');await page.reload();await page.locator('iframe').first().waitFor();frame=await(await page.locator('iframe').first().elementHandle()).contentFrame();await frame.waitForFunction(()=>window.Product?.initialized);await frame.evaluate(()=>Product.open('notebook','notes'));await frame.locator('#saveState[data-state="saved"]').waitFor();
     assert.deepEqual(await frame.evaluate(()=>doc.blocks.find(b=>b.type==='drawing').strokes),original);
     console.log('Drawing persisted');
     // Supply schema-shaped AI fixtures through the same response handler used by Streamlit.
