@@ -258,8 +258,7 @@ async function startRecording(){
   try{
     await saveNow();
     stream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true}});
-    const mime=['audio/webm;codecs=opus','audio/ogg;codecs=opus','audio/mp4'].find(x=>MediaRecorder.isTypeSupported(x));
-    recorder=new MediaRecorder(stream,{...(mime?{mimeType:mime}:{}),audioBitsPerSecond:32000});
+    recorder=MobileAudio.createRecorder(stream);
     const session={id:uid(),doc,recorder,stream,parts:[],keys:[],queue:Promise.resolve(),size:0,failed:false};
     recordingSession=session;recordId=session.id;recordDoc=doc;recordElapsed=0;recordSince=performance.now();
     doc.recordingParts=[];doc.recordingType=recorder.mimeType;doc.recordingId=session.id;
@@ -280,6 +279,7 @@ async function startRecording(){
     recorder.onerror=()=>{microphoneError('recordError');stopRecording()};
     recorder.onstop=()=>finishRecording(session);
     recorder.start(5000);
+    session.cleanup=MobileAudio.protect(stream,recorder,()=>{microphoneError('recordError');stopRecording()});
     $('#recordControls').hidden=false;$('#timer').hidden=false;$('#level').hidden=false;
     $('#pauseRecording').textContent=t('pause');$('#microphoneError').hidden=true;notice('');audioProgress('');updateRecording();
   }catch(error){stream?.getTracks().forEach(track=>track.stop());recordingSession=null;microphoneError(error.name==='NotAllowedError'?'micDenied':'recordError');}
@@ -291,7 +291,7 @@ function pauseRecording(){if(!recorder)return;if(recorder.state==='recording'){r
 function stopRecording(){if(recorder&&recorder.state!=='inactive'){recordElapsed=elapsed();recorder.stop()}}
 async function finishRecording(session){
   audioBusy=true;updateAudioControls();cancelAnimationFrame(recordFrame);
-  session.stream.getTracks().forEach(track=>track.stop());audioContext?.close().catch(()=>{});
+  session.cleanup?.();session.stream.getTracks().forEach(track=>track.stop());audioContext?.close().catch(()=>{});
   $('#recordControls').hidden=true;$('#timer').hidden=true;$('#level').hidden=true;
   $('#recordStatus').textContent='';audioProgress(t('savingAudio'));
   await session.queue;
@@ -337,6 +337,7 @@ async function uploadRequest(kind,payload,context,task){
 async function analyze(){
   if(pending||audioBusy||recordingSession)return;
   if(!doc.audioKey)return notice(t('noAudio'));
+  if(doc.pack&&!doc.pack.partial&&doc.pack.audioKey===doc.audioKey&&doc.pack.target_language===doc.target&&doc.pack.original_language===doc.original){material='summary';renderMaterials();setView('materials');return;}
   if(!bridge.has_key)return notice(t('keyMissing'),true);
   const context={lectureId:doc.id,audioKey:doc.audioKey},target=doc.target,original=doc.original,name=doc.audioName;
   const task={cancelled:false};uploadTask=task;pending={...context,kind:'analyze'};updateAudioControls();
@@ -357,11 +358,21 @@ async function analyze(){
     }
     if(!ack.ready)await uploadRequest('upload_finish',{uploadId},context,task);
     if(task.cancelled)throw audioError('uploadCancelled');
-    uploadTask=null;$('#cancelAudioUpload').hidden=true;audioProgress(t('aiProcessing'));
-    await receive(await bridgeRequest('analyze',{uploadId,target,original},context,1800000));
+    task.phase='analysis';$('#cancelAudioUpload').textContent='Остановить после текущей части';audioProgress(t('aiProcessing'));
+    let response;
+    do {
+      response=await bridgeRequest('analyze',{uploadId,target,original},context,1800000);
+      await receive(response);
+      if(response.error)break;
+      if(response.more){
+        audioProgress('Готово частей: '+response.pack.chunks.length+' · текст доступен в материалах. Продолжаю…');
+        if(doc.id===context.lectureId&&response.pack.chunks.length===1){material='transcript';renderMaterials();setView('materials');}
+      }
+    } while(response.more&&!task.cancelled);
+    if(task.cancelled)notice('Обработка остановлена. Готовые части сохранены; нажми «Создать материалы», чтобы продолжить.');
     audioProgress('');
   }catch(error){notice(t(error.category||'uploadError'),true);audioProgress('');}
-  finally{uploadTask=null;pending=null;$('#cancelAudioUpload').hidden=true;updateAudioControls();}
+  finally{uploadTask=null;pending=null;$('#cancelAudioUpload').hidden=true;$('#cancelAudioUpload').disabled=false;$('#cancelAudioUpload').textContent=t('cancelUpload');updateAudioControls();}
 }
 async function sendRequest(kind,payload,sourceContext=null){
   if(!bridge.has_key)return notice(t('keyMissing'),true);
@@ -551,6 +562,7 @@ for(const selector of ['#audioFile','#audioFileFallback'])$(selector).onchange=a
 };
 $('#cancelAudioUpload').onclick=()=>{
   if(!uploadTask)return;uploadTask.cancelled=true;
+  if(uploadTask.phase==='analysis'){$('#cancelAudioUpload').disabled=true;audioProgress('Завершаю текущую часть и сохраняю результат…');return;}
   if(bridgeWaiter){const waiter=bridgeWaiter;bridgeWaiter=null;clearTimeout(waiter.timer);waiter.reject(audioError('uploadCancelled'));}
 };
 $('#audioPlayer').onerror=()=>{$('#playbackError').hidden=false;$('#playbackError').textContent=t('previewUnsupported')};

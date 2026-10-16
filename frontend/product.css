@@ -25,3 +25,5 @@ body{background:var(--app-background);color:var(--text-primary)}button,input,sel
 @media(min-width:1001px){.screen-heading>[data-action="create-menu"]{display:none}}
 
 .calendar-weekday{text-align:center;color:var(--text-secondary);padding:8px;font-size:12px}
+
+.keep-awake{display:flex;align-items:center;gap:8px;min-height:44px}.keep-awake input{width:20px;height:20px}#wakeStatus{flex-basis:100%;margin:0}@media(max-width:600px){input,select,textarea{font-size:16px!important}.audio-actions{align-items:stretch}.audio-actions button,.audio-actions a{min-height:44px}#audioPlayer{width:100%;max-width:100%}}

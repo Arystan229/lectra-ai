@@ -101,6 +101,20 @@ function wav(seconds=1){
       finally{bridgeRequest=originalRequest;bridge.has_key=originalKey;}
     });
     assert.deepEqual(cancellation,{part:1,busy:false,cancelled:true});
+    const stages=await frame.evaluate(async()=>{
+      const real=bridgeRequest,key=bridge.has_key;bridge.has_key=true;let count=0,seen=false;
+      const pack={title:'Test lecture',summary:'Summary',notes:[],terms:[],quiz:[],slides:[],recommendations:[],original_language:doc.original,target_language:doc.target,chunks:[{paragraphs:[{original:'Full speech',translation:'Полная речь'}],notes:[],terms:[],unclear:[]}]};
+      bridgeRequest=async(kind,payload,context)=>{
+        if(kind==='upload_start')return {chunkSize:4*1024*1024,nextIndex:2,received:4*1024*1024+100,ready:true};
+        if(kind!=='analyze')throw Error(kind);
+        count++;if(count===2)seen=doc.pack?.partial===true;
+        return {id:'stage-'+count,kind,lectureId:context.lectureId,audioKey:context.audioKey,more:count===1,partial:count===1,pack:{...pack,partial:count===1}};
+      };
+      try{await analyze();await analyze();return {count,seen,complete:!doc.pack.partial};}
+      finally{bridgeRequest=real;bridge.has_key=key;}
+    });
+    assert.deepEqual(stages,{count:2,seen:true,complete:true});
+    console.log('Progressive results and zero-network local result cache: passed');
     const stale=await frame.evaluate(async()=>{
       const originalPack=doc.pack;
       await receive({id:'stale-result',kind:'analyze',lectureId:doc.id,audioKey:'old-recording',pack:{title:'Wrong audio'}});
@@ -115,6 +129,7 @@ function wav(seconds=1){
     await frame2.waitForFunction(()=>window.Product?.initialized);await frame2.evaluate(()=>Product.open('notebook','notes'));
     await frame2.locator('#downloadAudio').waitFor({state:'visible'});
     assert((await frame2.locator('.editor').first().innerText()).includes('Мои заметки'));
+    await page.setViewportSize({width:390,height:844});
     await frame2.locator('#startRecording').click();
     await frame2.locator('#stopRecording').waitFor({state:'visible'});
     await page.waitForTimeout(750);

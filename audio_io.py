@@ -116,7 +116,7 @@ class AudioStore:
         return item
 
 
-def decoded_chunks(item):
+def decoded_chunks(item, skip=0):
     """Decode bounded PCM blocks, caching each WAV before yielding to AI.
 
     Retries reuse completed blocks and seek past them. No full lecture PCM buffer
@@ -128,7 +128,8 @@ def decoded_chunks(item):
     duration = 0
     for index, info in enumerate(state['parts']):
         duration += info['seconds']
-        yield index, duration, (folder / info['name']).read_bytes()
+        if index >= skip:
+            yield index, duration, (folder / info['name']).read_bytes()
     if state['complete']:
         return
     if duration > MAX_SECONDS:
@@ -182,3 +183,17 @@ def decoded_chunks(item):
                 process.kill()
             process.wait()
             process.stdout.close()
+
+
+def compact_audio(wav):
+    """Lossless FLAC for provider transport; fall back to the valid PCM on failure."""
+    try:
+        result = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), '-nostdin', '-v', 'error',
+                                 '-i', 'pipe:0', '-c:a', 'flac', '-f', 'flac', 'pipe:1'],
+                                input=wav, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                timeout=30, check=True)
+        if result.stdout.startswith(b'fLaC') and len(result.stdout) < len(wav):
+            return result.stdout, 'audio/flac'
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return wav, 'audio/wav'
