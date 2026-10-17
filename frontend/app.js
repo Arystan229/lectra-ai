@@ -11,7 +11,7 @@ const t=key=>translations[lang][key]||translations.ru[key]||key;
 const uid=()=>crypto.randomUUID(), clone=x=>structuredClone(x), esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clock=sec=>{sec=Math.max(0,Math.floor(sec));return(sec>=3600?String(Math.floor(sec/3600)).padStart(2,'0')+':':'')+String(Math.floor(sec%3600/60)).padStart(2,'0')+':'+String(sec%60).padStart(2,'0')};
 const svg=name=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${icons[name]||icons.pen}"/></svg>`;
-function localize(root=document){document.documentElement.lang=lang;root.querySelectorAll('[data-i18n]').forEach(el=>el.textContent=t(el.dataset.i18n));root.querySelectorAll('[data-placeholder]').forEach(el=>el.placeholder=t(el.dataset.placeholder));root.querySelectorAll('[data-label]').forEach(el=>{el.title=t(el.dataset.label);el.setAttribute('aria-label',t(el.dataset.label))});root.querySelectorAll('[data-icon]').forEach(el=>{if(!el.querySelector('svg'))el.insertAdjacentHTML('afterbegin',svg(el.dataset.icon))});$('#inkColor').setAttribute('aria-label',t('color'));$('#inkWidth').setAttribute('aria-label',t('width'));$('#uiLanguage').setAttribute('aria-label',t('interfaceLanguage'));$('#lectureTitle').setAttribute('aria-label',t('newLecture'));}
+function localize(root=document){document.documentElement.lang=lang;root.querySelectorAll("[data-ui-label]").forEach(el=>el.setAttribute("aria-label",UI.literal(el.dataset.uiLabel)));root.querySelectorAll("[data-ui]").forEach(el=>el.textContent=UI.literal(el.dataset.ui));$("#panelDivider").setAttribute("aria-label",UI.literal("Ширина панелей"));root.querySelectorAll('[data-i18n]').forEach(el=>el.textContent=t(el.dataset.i18n));root.querySelectorAll('[data-placeholder]').forEach(el=>el.placeholder=t(el.dataset.placeholder));root.querySelectorAll('[data-label]').forEach(el=>{el.title=t(el.dataset.label);el.setAttribute('aria-label',t(el.dataset.label))});root.querySelectorAll('[data-icon]').forEach(el=>{if(!el.querySelector('svg'))el.insertAdjacentHTML('afterbegin',svg(el.dataset.icon))});$('#inkColor').setAttribute('aria-label',t('color'));$('#inkWidth').setAttribute('aria-label',t('width'));$('#uiLanguage').setAttribute('aria-label',t('interfaceLanguage'));$('#lectureTitle').setAttribute('aria-label',t('newLecture'));}
 function notice(message,error=false){$('#notice').textContent=message;$('#notice').classList.toggle('error',error);$('#notice').hidden=!message;}
 function signal(type,extra={}){window.parent.postMessage({isStreamlitMessage:true,type,...extra},'*')}
 function height(){signal('streamlit:setFrameHeight',{height:Math.max(document.documentElement.scrollHeight,900)})}
@@ -54,7 +54,8 @@ function renderBlocks(containerId,blocks){
   const container=$('#'+containerId);container.innerHTML='';
   for(const block of blocks){
     const wrap=document.createElement('div');wrap.className='note-block';wrap.dataset.id=block.id;
-    if(block.type==='drawing'){
+    if(block.type==='attachment'){NotebookPaper.attachment(block,wrap);
+    }else if(block.type==='drawing'){
       const canvas=document.createElement('canvas');canvas.width=1000;canvas.height=650;canvas.className='drawing-preview';
       canvas.setAttribute('role','img');canvas.setAttribute('aria-label',t('drawing'));
       drawStrokes(canvas,block.strokes||[]);wrap.append(canvas);
@@ -84,7 +85,7 @@ function renderBlocks(containerId,blocks){
     actions.append(remove);wrap.append(actions);container.append(wrap);
   }
   if(!blocks.length){const empty=document.createElement('p');empty.className='empty';empty.textContent=t(containerId==='finalBlocks'?'emptyFinal':'emptyNotes');container.append(empty)}
-  height();
+  window.NotebookPaper?.refresh();height();
 }
 function setView(next,restoreScroll=false){
   const scrollWindow=notebookScrollHost();
@@ -358,18 +359,18 @@ async function analyze(){
     }
     if(!ack.ready)await uploadRequest('upload_finish',{uploadId},context,task);
     if(task.cancelled)throw audioError('uploadCancelled');
-    task.phase='analysis';$('#cancelAudioUpload').textContent='Остановить после текущей части';audioProgress(t('aiProcessing'));
+    task.phase='analysis';$('#cancelAudioUpload').textContent=UI.literal("Остановить после текущей части");audioProgress(t('aiProcessing'));
     let response;
     do {
       response=await bridgeRequest('analyze',{uploadId,target,original},context,1800000);
       await receive(response);
       if(response.error)break;
       if(response.more){
-        audioProgress('Готово частей: '+response.pack.chunks.length+' · текст доступен в материалах. Продолжаю…');
+        audioProgress(UI.literal("Готово частей: ")+response.pack.chunks.length+UI.literal(" · текст доступен в материалах. Продолжаю…"));
         if(doc.id===context.lectureId&&response.pack.chunks.length===1){material='transcript';renderMaterials();setView('materials');}
       }
     } while(response.more&&!task.cancelled);
-    if(task.cancelled)notice('Обработка остановлена. Готовые части сохранены; нажми «Создать материалы», чтобы продолжить.');
+    if(task.cancelled)notice(UI.literal("Обработка остановлена. Готовые части сохранены; нажми «Создать материалы», чтобы продолжить."));
     audioProgress('');
   }catch(error){notice(t(error.category||'uploadError'),true);audioProgress('');}
   finally{uploadTask=null;pending=null;$('#cancelAudioUpload').hidden=true;$('#cancelAudioUpload').disabled=false;$('#cancelAudioUpload').textContent=t('cancelUpload');updateAudioControls();}
@@ -417,14 +418,14 @@ function draftBlocks(){
     blocks.push(textBlock(`<h2>${esc(section.heading)}</h2><p>${esc(section.text).replace(/\n/g,'<br>')}</p>${references}`,{kind:'ai',sourceBlockIds:ids}));
     for(const id of ids){
       const index=doc.blocks.findIndex(b=>b.id===id);if(index<0)continue;
-      // Keep a run of drawings with the text that precedes it, including explicit drawing references.
-      let j=doc.blocks[index].type==='drawing'?index:index+1;
-      for(;j<doc.blocks.length&&doc.blocks[j].type==='drawing';j++){
+      // Preserve drawings and attached originals beside the preceding text.
+      let j=['drawing','attachment'].includes(doc.blocks[index].type)?index:index+1;
+      for(;j<doc.blocks.length&&['drawing','attachment'].includes(doc.blocks[j].type);j++){
         const drawing=doc.blocks[j];if(!placed.has(drawing.id)){blocks.push(clone(drawing));placed.add(drawing.id)}
       }
     }
   }
-  for(const block of doc.blocks)if(block.type==='drawing'&&!placed.has(block.id))blocks.push(clone(block));
+  for(const block of doc.blocks)if(['drawing','attachment'].includes(block.type)&&!placed.has(block.id))blocks.push(clone(block));
   return blocks;
 }
 function renderDraft(){
@@ -433,6 +434,7 @@ function renderDraft(){
   box.onclick=event=>{const link=event.target.closest('[data-time]');if(link){event.preventDefault();seek(Number(link.dataset.time),link.dataset.audioKey)}};
   for(const block of draftBlocks()){
     if(block.type==='drawing'){const canvas=document.createElement('canvas');canvas.width=1000;canvas.height=650;canvas.className='draft-drawing';canvas.setAttribute('role','img');canvas.setAttribute('aria-label',t('drawing'));drawStrokes(canvas,block.strokes||[]);box.append(canvas)}
+    else if(block.type==='attachment'){const wrap=document.createElement('div');box.append(wrap);NotebookPaper.attachment(block,wrap)}
     else box.insertAdjacentHTML('beforeend',sanitize(block.html));
   }
   box.insertAdjacentHTML('beforeend',`<p class="meta">${t('noDrawingAI')}</p><button id="acceptDraft" class="primary">${t('accept')}</button> <button id="discardDraft" class="quiet">${t('discard')}</button>`);
@@ -447,7 +449,7 @@ function renderRestoreFinal(){let button=$('#restorePreviousFinal');if(button)bu
 function download(blob,name){const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000)}
 function jsonDownload(value,name){download(new Blob([JSON.stringify(value,null,2)],{type:'application/json'}),name)}
 function transcriptText(translated=false){return(doc.pack?.chunks||[]).map((c,i)=>'['+clock(i*300)+']\n'+c.paragraphs.map(p=>p[translated?'translation':'original']).join('\n\n')).join('\n\n')}
-function renderDownloads(){const items=$('#downloadItems');items.innerHTML='';const add=(label,action)=>{const b=document.createElement('button');b.textContent=t(label);b.onclick=()=>{action();$('#downloads').open=false};items.append(b)};add('personalExport',()=>jsonDownload({...doc,audioKey:null,recordingParts:[]},'lectra-notes.json'));add('notesHtml',()=>{const blocks=doc.finalBlocks.length?doc.finalBlocks:doc.blocks;const body=blocks.map(b=>{if(b.type==='text')return sanitize(b.html);const c=document.createElement('canvas');c.width=1000;c.height=650;drawStrokes(c,b.strokes||[]);return `<img src="${c.toDataURL()}" style="max-width:100%">`}).join('\n');download(new Blob([`<!doctype html><html lang="${lang}"><meta charset="UTF-8"><title>${esc(doc.title||t('newLecture'))}</title><body style="font:16px/1.6 sans-serif;max-width:800px;margin:40px auto"><h1>${esc(doc.title||t('newLecture'))}</h1>${body}</body></html>`],{type:'text/html'}),'lectra-notes.html')});if(currentAudioBlob&&downloadAudioURL){const link=document.createElement('a');link.className='download-link';link.textContent=t('audioExport');link.href=downloadAudioURL;link.download=$('#downloadAudio').download;items.append(link);}if(doc.partialPack)add('partial',()=>jsonDownload(doc.partialPack,'lectra-partial.json'));if(doc.pack){add('lectureExport',()=>jsonDownload(doc,'lectra-lecture.json'));add('originalExport',()=>download(new Blob([transcriptText()],{type:'text/plain;charset=utf-8'}),'lecture-original.txt'));add('translatedExport',()=>download(new Blob([transcriptText(true)],{type:'text/plain;charset=utf-8'}),'lecture-translation.txt'));if(doc.pack.pptx_base64)add('pptx',()=>{const bytes=Uint8Array.from(atob(doc.pack.pptx_base64),c=>c.charCodeAt(0));download(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.presentationml.presentation'}),'lectra-presentation.pptx')});}}
+function renderDownloads(){const items=$('#downloadItems');items.innerHTML='';const add=(label,action)=>{const b=document.createElement('button');b.textContent=t(label);b.onclick=()=>{action();$('#downloads').open=false};items.append(b)};add('personalExport',()=>jsonDownload({...doc,audioKey:null,recordingParts:[]},'lectra-notes.json'));add('notesHtml',()=>{const blocks=doc.finalBlocks.length?doc.finalBlocks:doc.blocks;const body=blocks.map(b=>{if(b.type==='text')return sanitize(b.html);if(b.type==='attachment')return `<p>${esc(UI.literal('Файл в тетради'))}: ${esc(b.name)}</p>`;const c=document.createElement('canvas');c.width=1000;c.height=650;drawStrokes(c,b.strokes||[]);return `<img src="${c.toDataURL()}" style="max-width:100%">`}).join('\n');download(new Blob([`<!doctype html><html lang="${lang}"><meta charset="UTF-8"><title>${esc(doc.title||t('newLecture'))}</title><body style="font:16px/1.6 sans-serif;max-width:800px;margin:40px auto"><h1>${esc(doc.title||t('newLecture'))}</h1>${body}</body></html>`],{type:'text/html'}),'lectra-notes.html')});if(currentAudioBlob&&downloadAudioURL){const link=document.createElement('a');link.className='download-link';link.textContent=t('audioExport');link.href=downloadAudioURL;link.download=$('#downloadAudio').download;items.append(link);}if(doc.partialPack)add('partial',()=>jsonDownload(doc.partialPack,'lectra-partial.json'));if(doc.pack){add('lectureExport',()=>jsonDownload(doc,'lectra-lecture.json'));add('originalExport',()=>download(new Blob([transcriptText()],{type:'text/plain;charset=utf-8'}),'lecture-original.txt'));add('translatedExport',()=>download(new Blob([transcriptText(true)],{type:'text/plain;charset=utf-8'}),'lecture-translation.txt'));if(doc.pack.pptx_base64)add('pptx',()=>{const bytes=Uint8Array.from(atob(doc.pack.pptx_base64),c=>c.charCodeAt(0));download(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.presentationml.presentation'}),'lectra-presentation.pptx')});}}
 function drawStrokes(canvas,strokes,selected=-1){const ctx=canvas.getContext('2d');ctx.clearRect(0,0,canvas.width,canvas.height);for(let i=0;i<strokes.length;i++){const s=strokes[i];if(!s.points?.length)continue;ctx.strokeStyle=s.color;ctx.lineCap='round';ctx.lineJoin='round';ctx.globalAlpha=s.tool==='marker'?.25:1;for(let j=0;j<s.points.length;j++){const p=s.points[j],prev=s.points[Math.max(0,j-1)];ctx.lineWidth=s.width*(p.pressure||.5)*1.5;ctx.beginPath();ctx.moveTo(prev.x,prev.y);ctx.lineTo(p.x+(j===0?.01:0),p.y);ctx.stroke()}if(i===selected){ctx.globalAlpha=1;const xs=s.points.map(p=>p.x),ys=s.points.map(p=>p.y);ctx.strokeStyle='#8197b5';ctx.lineWidth=1;ctx.setLineDash([5,4]);ctx.strokeRect(Math.min(...xs)-8,Math.min(...ys)-8,Math.max(...xs)-Math.min(...xs)+16,Math.max(...ys)-Math.min(...ys)+16);ctx.setLineDash([])}}ctx.globalAlpha=1;}
 let drawingPointer=null,drawingReturnId=null;
 function openDrawing(block,blocks){
@@ -552,7 +554,7 @@ $('#toggleNav').onclick=()=>{if(window.innerWidth<=1000)$('#app').classList.togg
 $('#newLecture').onclick=async()=>{if(volatileRecording&&!confirm(t('discardAudioWarning')))return;if(audioBusy||recordingSession)return notice(t('audioBusy'));if(recorder&&recorder.state!=='inactive')return notice(t('leaveRecording'));try{await saveNow();doc=makeDoc();doc.target=lang==='en'?'English':lang==='zh'?'Chinese':'Russian';await saveNow();localStorage.setItem('lectra-current',doc.id);view='notes';split=false;closeNotebookNavigation(false);renderDoc()}catch{notice(t('saveError'),true)}};
 $('#newFolder').onclick=async()=>{const name=prompt(t('folderName'));if(!name?.trim())return;folders.push({id:uid(),name:name.trim()});try{await write('settings',folders,'folders');languages();renderNav()}catch{notice(t('saveError'),true)}};
 $('#searchLectures').oninput=renderNav;$('#lectureTitle').oninput=()=>{resizeTitle();doc.title=$('#lectureTitle').value;scheduleSave()};$('#subject').onchange=()=>{doc.subject=$('#subject').value;scheduleSave()};$('#originalLanguage').onchange=()=>{doc.original=$('#originalLanguage').value;scheduleSave()};$('#materialsLanguage').onchange=()=>{doc.target=$('#materialsLanguage').value;scheduleSave()};
-$('#uiLanguage').value=lang;$('#uiLanguage').onchange=()=>{lang=$('#uiLanguage').value;localStorage.setItem('lectra-ui',lang);localize();languages();renderNav();renderMaterials();renderDownloads();renderDraft();renderBlocks('noteBlocks',doc.blocks);renderBlocks('finalBlocks',doc.finalBlocks);updateSaved();$('#keyState').textContent=t(bridge.has_key?'keyReady':'keyMissing');height()};
+$('#uiLanguage').value=lang;$('#uiLanguage').onchange=async()=>{if(recordingSession||audioBusy||pending){$('#uiLanguage').value=lang;return notice(t('audioBusy'))}await saveNow();lang=$('#uiLanguage').value;localStorage.setItem('lectra-ui',lang);localize();languages();renderNav();renderMaterials();renderDownloads();renderDraft();renderBlocks('noteBlocks',doc.blocks);renderBlocks('finalBlocks',doc.finalBlocks);updateSaved();$('#keyState').textContent=t(bridge.has_key?'keyReady':'keyMissing');location.reload()};
 $$('[data-view]').forEach(b=>b.onclick=()=>{split=false;setView(b.dataset.view,true)});$$('[data-material]').forEach(b=>b.onclick=()=>{const host=notebookScrollHost();doc.materialScroll=doc.materialScroll||{};doc.materialScroll[material]=host.scrollTop??host.scrollY;material=b.dataset.material;renderMaterials();requestAnimationFrame(()=>host.scrollTo({top:doc.materialScroll[material]??doc.materialScroll.summary??0,behavior:'instant'}))});$('#splitView').onclick=()=>{split=!split;setView('notes')};
 $('#startRecording').onclick=startRecording;$('#pauseRecording').onclick=pauseRecording;$('#stopRecording').onclick=stopRecording;$('#markTime').onclick=()=>markMoment();$('#confusedTime').onclick=()=>markMoment(true);$('#uploadAudio').onclick=()=>$('#audioFile').click();
 $('#browseAudioFiles').onclick=()=>$('#audioFileFallback').click();
@@ -562,7 +564,7 @@ for(const selector of ['#audioFile','#audioFileFallback'])$(selector).onchange=a
 };
 $('#cancelAudioUpload').onclick=()=>{
   if(!uploadTask)return;uploadTask.cancelled=true;
-  if(uploadTask.phase==='analysis'){$('#cancelAudioUpload').disabled=true;audioProgress('Завершаю текущую часть и сохраняю результат…');return;}
+  if(uploadTask.phase==='analysis'){$('#cancelAudioUpload').disabled=true;audioProgress(UI.literal("Завершаю текущую часть и сохраняю результат…"));return;}
   if(bridgeWaiter){const waiter=bridgeWaiter;bridgeWaiter=null;clearTimeout(waiter.timer);waiter.reject(audioError('uploadCancelled'));}
 };
 $('#audioPlayer').onerror=()=>{$('#playbackError').hidden=false;$('#playbackError').textContent=t('previewUnsupported')};
@@ -572,7 +574,7 @@ $('#shareAudio').onclick=()=>{
     .catch(error=>{if(error.name!=='AbortError')notice(t('genericError'),true)});
 };
 $('#analyze').onclick=()=>analyze().catch(()=>notice(t('genericError'),true));$('#buildFinal').onclick=()=>buildFinal().catch(()=>notice(t('genericError'),true));
-async function collectBackupAssets(entries){const assets={};for(const d of entries){const keys=new Set([...(d.sources||[]).map(s=>s.assetKey),d.audioKey,...[...(d.blocks||[]),...(d.pages||[]).flatMap(p=>p.blocks||[]),...(d.pageTrash||[]).flatMap(p=>p.blocks||[])].map(b=>b.source?.audioKey),...(d.finalBlocks||[]).map(b=>b.source?.audioKey)].filter(Boolean));for(const key of keys){const a=await read('assets',key).catch(()=>null)||(key===doc.audioKey?currentAudioBlob:null);if(a)assets[key]={data:await blobData(a),type:a.type}}}return assets;}
+async function collectBackupAssets(entries){const assets={};for(const d of entries){const keys=new Set([...(d.sources||[]).map(s=>s.assetKey),...[...(d.blocks||[]),...(d.finalBlocks||[]),...(d.previousFinal||[]),...(d.pages||[]).flatMap(p=>p.blocks||[]),...(d.pageTrash||[]).flatMap(p=>p.blocks||[]),...(d.blockTrash||[]).map(x=>x.block),...(d.versions||[]).flatMap(v=>(v.pages||[]).flatMap(p=>p.blocks||[]))].map(b=>b.assetKey),d.audioKey,...[...(d.blocks||[]),...(d.pages||[]).flatMap(p=>p.blocks||[]),...(d.pageTrash||[]).flatMap(p=>p.blocks||[])].map(b=>b.source?.audioKey),...(d.finalBlocks||[]).map(b=>b.source?.audioKey)].filter(Boolean));for(const key of keys){const a=await read('assets',key).catch(()=>null)||(key===doc.audioKey?currentAudioBlob:null);if(a)assets[key]={data:await blobData(a),type:a.type}}}return assets;}
 $('#backup').onclick=async()=>{await saveNow().catch(()=>{});const entries=await all('documents').catch(()=>clone(docs));const currentIndex=entries.findIndex(d=>d.id===doc.id);if(currentIndex<0)entries.push(clone(doc));else entries[currentIndex]=clone(doc);const assets=await collectBackupAssets(entries);prepareNotebookBackup({version:1,documents:entries,folders,assets,product:window.Product?.backupState()})};$('#restore').onclick=()=>$('#restoreFile').click();$('#restoreFile').onchange=async event=>{try{const raw=JSON.parse(await event.target.files[0].text());const entries=raw.documents||[raw];if(!Array.isArray(entries)||entries.some(d=>!d.id||!Array.isArray(d.blocks)))throw new Error();for(const d of entries){for(const b of[...d.blocks,...(d.finalBlocks||[])])if(b.type==='text')b.html=sanitize(b.html||'');await write('documents',d)}for(const[key,a]of Object.entries(raw.assets||{})){const bytes=Uint8Array.from(atob(a.data),c=>c.charCodeAt(0));await write('assets',new Blob([bytes],{type:a.type}),key)}if(Array.isArray(raw.folders)){folders=raw.folders;await write('settings',folders,'folders')}docs=await all('documents');doc=clone(entries[0]);if(raw.product)await window.Product?.restoreState(raw.product);localStorage.setItem('lectra-current',doc.id);renderDoc();notice(t('importDone'))}catch{notice(t('importError'),true)}};
 window.addEventListener('beforeunload',event=>{if(unsaved||volatileRecording||audioBusy||uploadTask||recordingSession){event.preventDefault();event.returnValue=t('keepUnsaved')}});
 window.addEventListener('message',event=>{if(event.source!==window.parent||event.data?.type!=='streamlit:render')return;bridge=event.data.args||{};$('#keyState').textContent=t(bridge.has_key?'keyReady':'keyMissing');if(bridge.response){const response=bridge.response;ready.then(()=>{
