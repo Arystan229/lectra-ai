@@ -82,3 +82,15 @@ body{background:var(--app-background);color:var(--text-primary)}button,input,sel
  .lecture-options>summary>.lecture-option-value{grid-column:1;grid-row:2;max-width:100%}
  .lecture-options>summary::after{grid-column:2;grid-row:1/3}
 }
+
+.top-actions .interface-language{display:flex}.top-actions .interface-language>span{display:none}.top-actions .interface-language select{min-width:86px;max-width:100px}
+.subject-workspace{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(200px,1fr);gap:20px}.paper-settings{display:flex;gap:16px;margin:24px 0}.paper-settings label{display:flex;flex:1;flex-direction:column;gap:8px}
+#notesPane{--sheet-width:794px;--sheet-height:1123px}#noteBlocks{position:relative;line-height:28px;background-color:var(--sheet);background-position:0 0}
+#notesPane[data-ruling="ruled"] #noteBlocks{background-image:repeating-linear-gradient(to bottom,transparent 0,transparent 27px,#93a0b533 27px,#93a0b533 28px)}
+#notesPane[data-ruling="grid"] #noteBlocks{background-image:linear-gradient(#93a0b52b 1px,transparent 1px),linear-gradient(90deg,#93a0b52b 1px,transparent 1px);background-size:28px 28px}
+#notesPane[data-ruling="dots"] #noteBlocks{background-image:radial-gradient(#93a0b577 1px,transparent 1px);background-size:20px 20px}
+#notesPane .editor{line-height:28px;min-height:100px}#notesPane .editor p{line-height:28px}#notesPane .editor img{max-width:100%;height:auto}#sheetGuides{position:absolute;inset:0;pointer-events:none}#sheetGuides span{position:absolute;left:0;right:0;border-top:1px dashed #8993a555;text-align:right;font-size:10px;color:#60646c}
+.notebook-insert{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin-bottom:16px;font-size:11px;color:var(--text-secondary)}.notebook-insert>div{display:flex;flex-wrap:wrap;gap:2px}.notebook-insert button{font-size:11px;min-height:36px;padding:6px 8px}
+.workspace:not(.split) #notesPane{width:100%;max-width:var(--sheet-width);margin:0 auto}.attachment-card{display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);padding:16px;border-radius:10px}.attachment-card>div{flex:1;min-width:100px}.attachment-card strong{display:block;overflow-wrap:anywhere}.attachment-card small{display:block;color:var(--text-secondary);font-size:12px}.attachment-icon svg{width:24px;height:24px}.attachment-card a,.attachment-card button{font-size:12px;min-height:40px}
+@media(max-width:600px){.subject-workspace{grid-template-columns:1fr}.paper-settings{flex-direction:column}.topbar .breadcrumb{max-width:28%}.top-actions .interface-language select{min-width:75px;width:85px;font-size:16px!important}.notebook-insert>div{display:grid;grid-template-columns:1fr 1fr;width:100%}.notebook-insert button{min-height:44px}.attachment-card{padding:12px}}
+@media print{.sidebar,.topbar,.mobile-nav,.recording-panel,.book-tabs,.lecture-options,.page-navigator,.viewbar,.notebook-insert,.toolbar,.block-actions,#sheetGuides{display:none!important}#notesPane{border:0;max-width:none!important;padding:0}#noteBlocks{min-height:0!important}.note-block{break-inside:avoid}.editor{break-inside:auto}}

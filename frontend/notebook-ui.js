@@ -36,8 +36,8 @@ function initNotebookUI(){
     emptyFinal:'Здесь будет итоговый конспект. Собери черновик из заметок и материалов лекции или начни писать самостоятельно.',
     sideBySide:'Две панели',move:'Перемещать',uploadAudio:'Загрузить аудио'
   });
-  Object.assign(translations.en,{backupReady:'Backup is ready, including your latest edits. Save it to your device.',downloadBackup:'Download backup',checkItem:'New task',importHelp:'Formats and upload help',personalSpace:'Personal notebook',bold:'Bold · Ctrl+B',italic:'Italic · Ctrl+I',numbered:'Numbered list',addedToNotes:'Added to My notes. You can edit this block.',afterBlock:'After block',materialsEmptyTitle:'Make sense of your lecture',navigateCanvas:'Scroll',fingerDrawing:'Draw with a finger',drawingHint:'Move selects and drags a stroke. Scroll navigates without drawing. Using a stylus turns finger drawing off; you can enable it again.'});
-  Object.assign(translations.zh,{backupReady:'已准备好包含最新编辑的备份。',downloadBackup:'下载备份',checkItem:'新任务',importHelp:'音频格式与上传帮助',personalSpace:'个人笔记',bold:'粗体',italic:'斜体',numbered:'编号列表',addedToNotes:'已添加到我的笔记，可以编辑。',afterBlock:'在此块之后',materialsEmptyTitle:'整理讲座内容',navigateCanvas:'滚动',fingerDrawing:'用手指绘图'});
+  Object.assign(translations.en,{sourceDocument:'Source: document',backupReady:'Backup is ready, including your latest edits. Save it to your device.',downloadBackup:'Download backup',checkItem:'New task',importHelp:'Formats and upload help',personalSpace:'Personal notebook',bold:'Bold · Ctrl+B',italic:'Italic · Ctrl+I',numbered:'Numbered list',addedToNotes:'Added to My notes. You can edit this block.',afterBlock:'After block',materialsEmptyTitle:'Make sense of your lecture',navigateCanvas:'Scroll',fingerDrawing:'Draw with a finger',drawingHint:'Move selects and drags a stroke. Scroll navigates without drawing. Using a stylus turns finger drawing off; you can enable it again.'});
+  Object.assign(translations.zh,{sourceDocument:'来源：文档',backupReady:'已准备好包含最新编辑的备份。',downloadBackup:'下载备份',checkItem:'新任务',importHelp:'音频格式与上传帮助',personalSpace:'个人笔记',bold:'粗体',italic:'斜体',numbered:'编号列表',addedToNotes:'已添加到我的笔记，可以编辑。',afterBlock:'在此块之后',materialsEmptyTitle:'整理讲座内容',navigateCanvas:'滚动',fingerDrawing:'用手指绘图'});
   $$('.text-style').forEach(select=>{
     select.onchange=()=>{format('formatBlock',select.value);select.value='p'};
     // Keyboard focus must not erase the contenteditable selection.
@@ -47,7 +47,7 @@ function initNotebookUI(){
   // Keep writing and drawing one tap away; secondary commands use a touch menu.
   $$('.toolbar').forEach(toolbar=>{
     const more=document.createElement('details');more.className='format-more';
-    more.innerHTML='<summary aria-label="Дополнительное форматирование">···</summary><div class="format-menu"></div>';
+    more.innerHTML=UI.literal('<summary aria-label="Дополнительное форматирование">···</summary><div class="format-menu"></div>');
     const menu=more.querySelector('.format-menu');
     for(const button of [...toolbar.querySelectorAll('button')]){
       if(['bold','italic'].includes(button.dataset.format)||button.dataset.label==='addDrawing')continue;
@@ -64,8 +64,8 @@ function initNotebookUI(){
   $('#addFinalText').onclick=()=>{doc.finalBlocks.push(textBlock(''));renderBlocks('finalBlocks',doc.finalBlocks);$('#finalBlocks .note-block:last-child .editor').focus();scheduleSave()};
   const panes={notes:'notesPane',materials:'materialsPane',final:'finalPane'};
   $$('[data-view]').forEach(button=>{button.id='tab-'+button.dataset.view;button.setAttribute('role','tab');button.setAttribute('aria-controls',panes[button.dataset.view]);const pane=$('#'+panes[button.dataset.view]);pane.setAttribute('role','tabpanel');pane.setAttribute('aria-labelledby',button.id)});
-  $('.view-tabs').setAttribute('aria-label','Представление конспекта');
-  $('.material-tabs').setAttribute('role','tablist');$('.material-tabs').setAttribute('aria-label','Материалы лекции');
+  $('.view-tabs').setAttribute('aria-label',UI.literal('Представление конспекта'));
+  $('.material-tabs').setAttribute('role','tablist');$('.material-tabs').setAttribute('aria-label',UI.literal('Материалы лекции'));
   $$('[data-material]').forEach(button=>{button.setAttribute('role','tab');button.setAttribute('aria-controls','materialContent')});
   $('#materialContent').setAttribute('role','tabpanel');$('#materialContent').setAttribute('aria-label',t('lectureMaterials'));
   for(const selector of ['.view-tabs','.material-tabs'])$(selector).addEventListener('keydown',event=>{

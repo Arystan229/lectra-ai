@@ -3,6 +3,8 @@ const code=fs.readFileSync('frontend/mobile-audio.js','utf8');
 const calls=[];
 class Recorder{static isTypeSupported(mime){return mime.startsWith('audio/mp4')}constructor(stream,options){calls.push(options);if(options?.audioBitsPerSecond){const e=new Error('bitrate unsupported');e.name='NotSupportedError';throw e}this.mimeType=options?.mimeType||'default'}}
 const ctx={window:{},MediaRecorder:Recorder};vm.runInNewContext(code,ctx);
+ctx.localStorage={getItem:()=> 'en'};
+vm.runInNewContext(fs.readFileSync('frontend/ui-i18n.js','utf8'),ctx);ctx.UI=ctx.window.UI;
 assert(ctx.window.MobileAudio.createRecorder({}).mimeType.startsWith('audio/mp4'));assert.equal(calls.length,2);
 Recorder.isTypeSupported=()=>false;assert.equal(ctx.window.MobileAudio.createRecorder({}).mimeType,'default');
 let handler,trackHandler,requested=0,released=0,interrupted=0;

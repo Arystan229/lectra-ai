@@ -16,7 +16,7 @@ window.MobileAudio = {
     let lock=null, stopped=false, acquiring=false;
     const toggle=document.querySelector('#keepScreenAwake');
     const hint=document.querySelector('#wakeStatus');
-    const label=()=>{if(hint)hint.textContent=lock&&!lock.released?'Экран удерживается включённым':'Не блокируй экран и держи вкладку открытой во время записи.'};
+    const label=()=>{if(hint)hint.textContent=lock&&!lock.released?UI.literal("Экран удерживается включённым"):UI.literal("Не блокируй экран и держи вкладку открытой во время записи.")};
     async function acquire(){
       if(stopped||acquiring||document.visibilityState!=='visible'||!toggle?.checked||lock&&!lock.released)return;
       acquiring=true;
