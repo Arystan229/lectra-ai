@@ -82,7 +82,7 @@ function wav(seconds=1){
       };
       try{
         const currentKey=doc.audioKey;
-        await write('assets',new Blob([new Uint8Array(4*1024*1024+100)],{type:'audio/wav'}),currentKey);
+        const blob=new Blob([new Uint8Array(4*1024*1024+100)],{type:'audio/wav'});await write('assets',blob,currentKey);showAudio(blob,doc.audioName,currentKey);
         await Promise.all([analyze(),analyze()]);
         return packets;
       }finally{bridgeRequest=originalRequest;bridge.has_key=originalKey;}

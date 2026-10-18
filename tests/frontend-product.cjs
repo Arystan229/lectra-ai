@@ -1,7 +1,7 @@
 /* Product-shell regression: local CRUD and real document extraction; AI is a test fixture. */
 const{chromium}=require('playwright');const assert=require('node:assert/strict');const fs=require('node:fs/promises');const path=require('node:path');
 (async()=>{const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH});const context=await browser.newContext({viewport:{width:1440,height:1000},acceptDownloads:true});const page=await context.newPage();page.setDefaultTimeout(20000);const errors=[],metrics={};page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept(d.type()==='prompt'?'Новая страница':undefined));const out=process.env.ARTIFACT_DIR||path.resolve('test-results/product');await fs.mkdir(out,{recursive:true});
-async function frameReady(){await page.locator('iframe').first().waitFor();const f=await(await page.locator('iframe').first().elementHandle()).contentFrame();await f.waitForFunction(()=>window.Product?.initialized);return f}
+async function frameReady(){await page.locator('iframe').first().waitFor({timeout:90000});const f=await(await page.locator('iframe').first().elementHandle()).contentFrame();await f.waitForFunction(()=>window.Product?.initialized);return f}
 let f;
 async function action(name,id){const loc=f.locator(`[data-action="${name}"]${id!==undefined?`[data-id="${id}"]`:''}`).filter({visible:true}).first();await loc.click()}
 async function saved(){await f.waitForFunction(()=>!unsaved)}
