@@ -14,14 +14,21 @@ const svg=name=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stro
 function localize(root=document){document.documentElement.lang=lang;root.querySelectorAll("[data-ui-label]").forEach(el=>el.setAttribute("aria-label",UI.literal(el.dataset.uiLabel)));root.querySelectorAll("[data-ui]").forEach(el=>el.textContent=UI.literal(el.dataset.ui));$("#panelDivider").setAttribute("aria-label",UI.literal("Ширина панелей"));root.querySelectorAll('[data-i18n]').forEach(el=>el.textContent=t(el.dataset.i18n));root.querySelectorAll('[data-placeholder]').forEach(el=>el.placeholder=t(el.dataset.placeholder));root.querySelectorAll('[data-label]').forEach(el=>{el.title=t(el.dataset.label);el.setAttribute('aria-label',t(el.dataset.label))});root.querySelectorAll('[data-icon]').forEach(el=>{if(!el.querySelector('svg'))el.insertAdjacentHTML('afterbegin',svg(el.dataset.icon))});$('#inkColor').setAttribute('aria-label',t('color'));$('#inkWidth').setAttribute('aria-label',t('width'));$('#uiLanguage').setAttribute('aria-label',t('interfaceLanguage'));$('#lectureTitle').setAttribute('aria-label',t('newLecture'));}
 function notice(message,error=false){$('#notice').textContent=message;$('#notice').classList.toggle('error',error);$('#notice').hidden=!message;}
 function signal(type,extra={}){window.parent.postMessage({isStreamlitMessage:true,type,...extra},'*')}
-function height(){signal('streamlit:setFrameHeight',{height:Math.max(document.documentElement.scrollHeight,900)})}
+let heightFrame=0,lastFrameHeight=0;
+function height(){if(heightFrame)return;heightFrame=requestAnimationFrame(()=>{heightFrame=0;const next=Math.max(document.documentElement.scrollHeight,900);if(next!==lastFrameHeight){lastFrameHeight=next;signal('streamlit:setFrameHeight',{height:next})}})}
 let db,docs=[],folders=[],doc=null,view='notes',material='summary',split=false,activeEditor=null,editorRange=null,queue=Promise.resolve(),saveTimer,unsaved=false;
 let bridge={has_key:false},pending=null,received=new Set(),audioURL=null,playingKey=null,recorder=null,stream=null,audioContext=null,analyser=null,recordElapsed=0,recordSince=0,recordParts=[],recordId=null,recordSize=0,saveStatus='saved',editRevision=0,recordFrame=0,recordDoc=null,chunkQueue=Promise.resolve();
 let drawingBlock=null,drawingList=null,drawingTool='pen',drawUndo=[],drawRedo=[],stroke=null,selectedStroke=-1,dragPoint=null;
 function openDatabase(){return new Promise((resolve,reject)=>{const req=indexedDB.open('lectra-notebook',1);req.onupgradeneeded=()=>{const d=req.result;d.createObjectStore('documents',{keyPath:'id'});d.createObjectStore('settings');d.createObjectStore('assets');};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);})}
 function read(store,key){return new Promise((resolve,reject)=>{const req=db.transaction(store).objectStore(store).get(key);req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)})}
 function all(store){return new Promise((resolve,reject)=>{const req=db.transaction(store).objectStore(store).getAll();req.onsuccess=()=>resolve(req.result||[]);req.onerror=()=>reject(req.error)})}
-function write(store,value,key){return new Promise((resolve,reject)=>{const tx=db.transaction(store,'readwrite');const s=tx.objectStore(store);key===undefined?s.put(value):s.put(value,key);tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||new Error('aborted'));})}
+function write(store,value,key,timeout=15000){return new Promise((resolve,reject)=>{
+  const tx=db.transaction(store,'readwrite');let settled=false;
+  const finish=error=>{if(settled)return;settled=true;clearTimeout(timer);error?reject(error):resolve()};
+  const timer=setTimeout(()=>{try{tx.abort()}catch{}finish(new Error('Storage timed out'))},timeout);
+  tx.oncomplete=()=>finish();tx.onerror=()=>finish(tx.error||new Error('Storage failed'));tx.onabort=()=>finish(tx.error||new Error('Storage aborted'));
+  try{const objectStore=tx.objectStore(store);key===undefined?objectStore.put(value):objectStore.put(value,key)}catch(error){try{tx.abort()}catch{}finish(error)}
+})}
 function saveNow(){clearTimeout(saveTimer);if(!doc)return Promise.resolve();window.Product?.beforeSave();const revision=editRevision;const snapshot=clone(doc);snapshot.updated=Date.now();doc.updated=snapshot.updated;unsaved=true;saveStatus='saving';updateSaved();queue=queue.catch(()=>{}).then(()=>write('documents',snapshot)).then(()=>{const i=docs.findIndex(d=>d.id===snapshot.id);if(i<0)docs.push(snapshot);else docs[i]=snapshot;if(revision===editRevision){unsaved=false;saveStatus='saved';}updateSaved();renderNav();}).catch(error=>{unsaved=true;saveStatus='saveError';updateSaved();notice(t('saveError'),true);throw error;});return queue;}
 function scheduleSave(){editRevision++;unsaved=true;saveStatus='saving';updateSaved();clearTimeout(saveTimer);saveTimer=setTimeout(()=>saveNow().catch(()=>{}),450)}
 function updateSaved(){$('#saveState').textContent=t(saveStatus);$('#saveState').dataset.state=saveStatus}
@@ -117,7 +124,7 @@ function renderQuiz(){const box=$('#materialContent'),quiz=doc.pack.quiz||[];doc
 const AUDIO_LIMIT = 450 * 1024 * 1024;
 const AUDIO_TYPES = {mp3:'audio/mpeg',m4a:'audio/mp4',mp4:'audio/mp4',aac:'audio/aac',wav:'audio/wav',ogg:'audio/ogg',oga:'audio/ogg',opus:'audio/ogg',flac:'audio/flac',webm:'audio/webm',weba:'audio/webm'};
 Object.assign(translations.ru, {
-  audioExport:'Скачать аудио',
+  audioSessionOnly:'Файл выбран, но браузер не сохранил его надолго. Можно нажать «Создать материалы» сейчас. Не закрывай вкладку; при следующем открытии потребуется выбрать файл снова.',audioExport:'Скачать аудио',
   discardAudioWarning:'Аудио не сохранено на устройстве. Сначала скачай его. Перейти к другой лекции и потерять несохранённую запись?',
   uploadAudio:'Выбрать аудиофайл', browseFiles:'Не видно аудио? Открыть все файлы',
   pickerHint:'На телефоне выбери «Файлы» или «Обзор». Запись диктофона сначала сохрани в файлы устройства.',
@@ -138,7 +145,7 @@ Object.assign(translations.ru, {
   sourceChanged:'Полученный результат относится к предыдущей записи и не заменил текущий конспект.'
 });
 Object.assign(translations.en, {
-  audioExport:'Download audio',
+  audioSessionOnly:'File selected, but browser storage is unavailable. You can create materials now. Keep this tab open; you will need to select the file again next time.',audioExport:'Download audio',
   discardAudioWarning:'Audio has not been saved locally. Download it first. Leave this lecture and discard the unsaved recording?',
   uploadAudio:'Choose audio file',browseFiles:'Audio missing? Browse all files',pickerHint:'On a phone, choose Files or Browse. Save voice memos to your device files first.',
   audioFormats:'MP3, M4A, WAV, AAC, OGG, OPUS, FLAC, WebM · up to 450 MB, 4 hours',fileLarge:'Maximum file size is 450 MB.',
@@ -150,7 +157,7 @@ Object.assign(translations.en, {
   previewUnsupported:'This browser cannot play the format. You can download the original or send it for processing.',shareAudio:'Save / share',recordLimit:'Recording limit reached: 4 hours or 450 MB.',sourceChanged:'The result belongs to a previous recording and did not replace these materials.'
 });
 Object.assign(translations.zh, {
-  audioExport:'下载音频',
+  audioSessionOnly:'文件已选择，但浏览器未能保存。现在可以创建资料。请保持标签页打开，下次需重新选择文件。',audioExport:'下载音频',
   discardAudioWarning:'音频尚未保存到本机，请先下载。离开此讲座并丢弃未保存的录音？',
   uploadAudio:'选择音频文件',browseFiles:'找不到音频？浏览所有文件',pickerHint:'在手机上选择“文件”或“浏览”。请先将录音保存到设备文件中。',
   audioFormats:'MP3、M4A、WAV、AAC、OGG、OPUS、FLAC、WebM · 最大450 MB，4小时',fileLarge:'文件不能超过450 MB。',
@@ -168,7 +175,7 @@ const audioExtension = name => String(name).split('.').pop().toLowerCase();
 const fileSize = bytes => bytes<1024*1024 ? Math.max(1,Math.round(bytes/1024))+' KB' : (bytes/1024/1024).toFixed(1)+' MB';
 function updateAudioControls(){
   const locked=audioBusy||!!pending||!!recordingSession;
-  for(const id of ['startRecording','uploadAudio','browseAudioFiles']) $('#'+id).disabled=locked;
+  for(const id of ['startRecording','uploadAudio','browseAudioFiles','audioFile','audioFileFallback']) $('#'+id).disabled=locked;
   $('#analyze').disabled=locked;
   $('#buildFinal').disabled=!!pending;
 }
@@ -191,7 +198,7 @@ function showAudio(blob,name,key){
   link.href=downloadAudioURL;link.download=name;link.hidden=false;
   $('#audioArea').hidden=false;
   $('#playbackError').hidden=true;
-  $('#shareAudio').hidden=!(navigator.canShare&&navigator.canShare({files:[new File([blob],name,{type:blob.type})]}));
+  try{$('#shareAudio').hidden=!(navigator.canShare&&navigator.canShare({files:[new File([blob],name,{type:blob.type})]}))}catch{$('#shareAudio').hidden=true}
   renderDownloads();height();
 }
 async function refreshAudio(){
@@ -242,14 +249,17 @@ async function setAudio(file,name){
   if(doc.audioKey&&!confirm(t('audioReplace')))return;
   audioBusy=true;updateAudioControls();notice('');
   const target=doc,key=uid();
-  const blob=file.type.startsWith('audio/')?file:new Blob([file],{type:AUDIO_TYPES[audioExtension(name)]});
-  audioProgress(t('savingAudio'));
+  const blob=file.type.startsWith('audio/')?file:file.slice(0,file.size,AUDIO_TYPES[audioExtension(name)]);
+  // Keep the selected File available even when mobile storage is slow or full.
+  Object.assign(target,{audioKey:key,audioName:name,audioType:blob.type,pack:null,quizState:null,partialPack:null});
+  volatileRecording=true;showAudio(blob,name,key);renderMaterials();audioProgress(t('savingAudio'));
+  await new Promise(requestAnimationFrame);
   try{
-    await write('assets',blob,key);
-    Object.assign(target,{audioKey:key,audioName:name,audioType:blob.type,pack:null,quizState:null,partialPack:null});
-    await saveNow();showAudio(blob,name,key);renderMaterials();audioProgress(t('audioReady'));
-  }catch{notice(t('saveError'),true);audioProgress('');}
-  finally{audioBusy=false;updateAudioControls();}
+    await write('assets',blob,key,8000);
+    await saveNow();volatileRecording=false;audioProgress(t('audioReady'));
+  }catch{
+    notice(t('audioSessionOnly'),true);audioProgress(t('audioReady'));
+  }finally{audioBusy=false;updateAudioControls();}
 }
 async function startRecording(){
   if(audioBusy||pending||recordingSession)return;
@@ -302,8 +312,9 @@ async function finishRecording(session){
   if(blob.size){volatileRecording=true;showAudio(blob,name,session.id);}
   try{
     if(!blob.size)throw audioError('emptyAudio');
-    await write('assets',blob,session.id);
-    Object.assign(session.doc,{audioKey:session.id,audioName:name,audioType:mime,pack:null,partialPack:null,quizState:null,recordingParts:[]});
+    Object.assign(session.doc,{audioKey:session.id,audioName:name,audioType:mime,pack:null,partialPack:null,quizState:null});
+    await write('assets',blob,session.id,8000);
+    session.doc.recordingParts=[];
     await saveNow();
     // Remove checkpoint copies only after the final recording and document commit.
     volatileRecording=false;
@@ -344,8 +355,8 @@ async function analyze(){
   const task={cancelled:false};uploadTask=task;pending={...context,kind:'analyze'};updateAudioControls();
   notice('');audioProgress(t('uploadPreparing'));$('#cancelAudioUpload').hidden=false;
   try{
-    await saveNow();
-    const asset=await read('assets',context.audioKey);
+    await saveNow().catch(()=>{});
+    const asset=playingKey===context.audioKey&&currentAudioBlob?currentAudioBlob:await read('assets',context.audioKey);
     if(!asset?.size)throw audioError('audioMissing');
     const uploadId=context.audioKey;
     let ack=await uploadRequest('upload_start',{uploadId,name,size:asset.size,mime:asset.type},context,task);
@@ -502,14 +513,14 @@ canvas.onpointerdown=event=>{
   }
   selectedStroke=-1;checkpoint();
   if(drawingTool==='eraser'){const hit=hitStroke(point);if(hit>=0)drawingBlock.strokes.splice(hit,1)}
-  else{stroke={id:uid(),tool:drawingTool,color:$('#inkColor').value,width:Number($('#inkWidth').value),points:[point]};drawingBlock.strokes.push(stroke)}
+  else{stroke={id:uid(),tool:drawingTool,color:$('#inkColor').value,width:Number($('#inkWidth').value),points:[point],origin:point};drawingBlock.strokes.push(stroke)}
   drawStrokes(canvas,drawingBlock.strokes);updateDrawingHistory();
 };
 canvas.onpointermove=event=>{
   if(event.pointerType==='pen'&&drawingTool!=='pan')canvas.style.touchAction='none';
   if(event.pointerId!==drawingPointer)return;
   const samples=event.getCoalescedEvents?.()||[],points=(samples.length?samples:[event]).map(canvasPoint),point=points[points.length-1];
-  if(stroke)stroke.points.push(...points);
+  if(stroke){if(['line','rectangle','ellipse'].includes(stroke.tool))stroke.points=NotebookExperience.shapePoints(stroke.tool,stroke.origin,point);else stroke.points.push(...points);}
   if(drawingTool==='eraser'){const hit=hitStroke(point);if(hit>=0)drawingBlock.strokes.splice(hit,1)}
   if(dragPoint&&selectedStroke>=0){
     const selected=drawingBlock.strokes[selectedStroke].points;
@@ -584,4 +595,4 @@ window.addEventListener('message',event=>{if(event.source!==window.parent||event
 window.addEventListener('resize',()=>{if(window.innerWidth<1000&&split){split=false;setView('notes')}height()});
 const ready=(async()=>{try{db=await openDatabase();folders=await read('settings','folders')||[];docs=await all('documents');const current=localStorage.getItem('lectra-current');doc=clone(docs.find(d=>d.id===current)||docs.sort((a,b)=>b.updated-a.updated)[0]||makeDoc());if(doc.recordingParts?.length){const parts=await Promise.all(doc.recordingParts.map(key=>read('assets',key)));const blob=new Blob(parts.filter(Boolean),{type:doc.recordingType||'audio/webm'});const key=doc.recordingId||uid();await write('assets',blob,key);doc.audioKey=key;doc.audioType=blob.type;doc.audioName='recovered.'+(blob.type.includes('mp4')?'m4a':blob.type.includes('ogg')?'ogg':'webm');doc.recordingParts=[];notice(t('recovered'));}await saveNow();localStorage.setItem('lectra-current',doc.id);localize();renderDoc();$('#keyState').textContent=t(bridge.has_key?'keyReady':'keyMissing');}catch{notice(t('saveError'),true)}})();
 const finalToolbar=$('.toolbar').cloneNode(true);finalToolbar.querySelectorAll('[id]').forEach(n=>{const originalId=n.id;n.removeAttribute('id');n.onclick=()=>document.getElementById(originalId).click()});finalToolbar.querySelectorAll('[data-format]').forEach(b=>{b.onmousedown=e=>e.preventDefault();b.onclick=()=>format(b.dataset.format,b.dataset.value||null)});$('#finalBlocks').before(finalToolbar);
-initNotebookUI();localize();signal('streamlit:componentReady',{apiVersion:1});new ResizeObserver(()=>height()).observe(document.body);
+initNotebookUI();localize();signal('streamlit:componentReady',{apiVersion:1});signal('streamlit:setFrameHeight',{height:900});new ResizeObserver(()=>height()).observe(document.body);

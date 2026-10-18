@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>LECTRA</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="product.css">
+<link rel="stylesheet" href="notebook-experience.css">
 </head>
 <body>
 <a class="skip-link" href="#noteHeading" data-ui="К заметкам">К заметкам</a>
@@ -24,7 +25,7 @@
       <div class="document-heading"><textarea id="lectureTitle" rows="1" class="title-input" data-placeholder="newLecture" aria-label="Название лекции"></textarea><span id="saveState" class="save-state" role="status"></span></div>
       <div class="preferences"><label><span data-i18n="subject"></span><select id="subject"></select></label><label><span data-i18n="originalLanguage"></span><select id="originalLanguage"></select></label><label><span data-i18n="materialsLanguage"></span><select id="materialsLanguage"></select></label></div>
       <section class="recording-panel" aria-label="Запись лекции" data-ui-label="Запись лекции">
-        <div class="record-actions"><button id="startRecording" class="primary"><span data-icon="mic"></span><span data-i18n="start"></span></button><button id="uploadAudio" class="secondary"><span data-icon="upload"></span><span data-i18n="uploadAudio"></span></button><input id="audioFile" type="file" accept="audio/*,.mp3,.m4a,.wav,.aac,.ogg,.oga,.opus,.flac,.webm,.weba,.mp4" hidden><span id="recordStatus" class="record-status"></span><strong id="timer" class="timer" hidden>00:00</strong><meter id="level" min="0" max="1" value="0" hidden></meter></div>
+        <div class="record-actions"><button id="startRecording" class="primary"><span data-icon="mic"></span><span data-i18n="start"></span></button><span class="audio-picker"><button id="uploadAudio" class="secondary"><span data-icon="upload"></span><span data-i18n="uploadAudio"></span></button><input id="audioFile" type="file" data-label="uploadAudio" accept="audio/*,.mp3,.m4a,.wav,.aac,.ogg,.oga,.opus,.flac,.webm,.weba,.mp4"></span><span id="recordStatus" class="record-status"></span><strong id="timer" class="timer" hidden>00:00</strong><meter id="level" min="0" max="1" value="0" hidden></meter></div>
         <details class="audio-import-help"><summary data-i18n="importHelp"></summary><div><button id="browseAudioFiles" class="quiet" data-i18n="browseFiles"></button><input id="audioFileFallback" type="file" hidden><p class="hint" data-i18n="pickerHint"></p><p class="hint" data-i18n="audioFormats"></p></div></details>
         <div id="recordControls" class="record-controls" hidden><label class="keep-awake"><input id="keepScreenAwake" type="checkbox" checked> <span data-ui="Не выключать экран"></span></label><span id="wakeStatus" class="hint" role="status"></span><button id="pauseRecording" class="secondary" data-i18n="pause"></button><button id="stopRecording" class="primary" data-i18n="finish"></button><button id="markTime" class="quiet" data-i18n="mark"></button><button id="confusedTime" class="quiet" data-i18n="confused"></button></div>
         <div id="audioArea" hidden><audio id="audioPlayer" playsinline controls preload="metadata"></audio><div class="audio-actions"><span id="audioName"></span><a id="downloadAudio" class="audio-download secondary" data-i18n="audioExport" download hidden></a><button id="shareAudio" class="secondary" data-i18n="shareAudio" hidden></button><button id="analyze" class="primary" data-i18n="analyze"></button></div></div>
@@ -48,4 +49,5 @@
 <script src="app.js"></script>
 <script src="paper.js"></script>
 <script src="product.js"></script>
+<script src="notebook-experience.js"></script>
 </body></html>
