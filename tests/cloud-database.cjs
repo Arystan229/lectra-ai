@@ -1,0 +1,50 @@
+const assert=require('node:assert/strict'),fs=require('node:fs/promises');
+const {PGlite}=require('@electric-sql/pglite');
+(async()=>{
+ const db=new PGlite();
+ try{
+  await db.exec(`create role anon; create role authenticated; create schema auth; create schema storage;
+   create table auth.users(id uuid primary key);
+   create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+   grant usage on schema public,auth,storage to authenticated,anon;
+   create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint);
+   create table storage.objects(id uuid default gen_random_uuid(),bucket_id text,name text);
+   alter table storage.objects enable row level security;
+   grant select,insert,update,delete on storage.objects to authenticated;
+  `);
+  await db.exec(await fs.readFile('cloud/001_notebooks.sql','utf8'));
+  const owner='11111111-1111-4111-8111-111111111111',editor='22222222-2222-4222-8222-222222222222',reader='33333333-3333-4333-8333-333333333333',stranger='44444444-4444-4444-8444-444444444444';
+  const book='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',other='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',op='cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  await db.query('insert into auth.users select unnest($1::uuid[])',[ [owner,editor,reader,stranger] ]);
+  async function as(user){await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[user||'']);await db.exec('set role '+(user?'authenticated':'anon'))}
+  const rpc=async(name,params)=> (await db.query('select public.'+name+'('+params.map((_,i)=>'$'+(i+1)).join(',')+') as value',params)).rows[0].value;
+  await as(owner);await rpc('lectra_create',[book]);await rpc('lectra_create',[book]);
+  assert.equal(await rpc('lectra_save',[book,0,op,{title:'first'}]),1);
+  assert.equal(await rpc('lectra_save',[book,0,op,{title:'first'}]),1);
+  await assert.rejects(rpc('lectra_save',[book,0,op,{title:'reused'}]),/OPERATION_REUSED/);
+  const editInvite=await rpc('lectra_invite',[book,'editor']),readInvite=await rpc('lectra_invite',[book,'reader']);
+  await as(editor);assert.equal(await rpc('lectra_join',[editInvite]),book);assert.equal(await rpc('lectra_join',[editInvite]),book);
+  await assert.rejects(rpc('lectra_invite',[book,'editor']),/ACCESS_DENIED/);
+  await assert.rejects(rpc('lectra_save',[book,0,other,{title:'stale'}]),/REVISION_CONFLICT/);
+  assert.equal(await rpc('lectra_save',[book,1,other,{title:'editor'}]),2);
+  await db.query('insert into storage.objects(bucket_id,name) values($1,$2)',['lectra-files',book+'/'+op+'/'+op]);
+  assert.equal((await db.query("update storage.objects set name='changed' returning *")).rows.length,0);
+  assert.equal((await db.query('delete from storage.objects returning *')).rows.length,0);
+  await as(reader);await rpc('lectra_join',[readInvite]);assert.equal((await db.query('select * from public.lectra_books')).rows.length,1);
+  assert.equal((await db.query('select * from storage.objects')).rows.length,1);
+  await assert.rejects(rpc('lectra_save',[book,2,op,{title:'reader write'}]),/ACCESS_DENIED/);
+  await assert.rejects(db.query('insert into storage.objects(bucket_id,name) values($1,$2)',['lectra-files',book+'/'+op+'/'+other]));
+  await assert.rejects(db.query('update public.lectra_books set owner_id=$1',[reader]));
+  await as(stranger);assert.equal((await db.query('select * from public.lectra_books')).rows.length,0);assert.equal((await db.query('select * from storage.objects')).rows.length,0);
+  await assert.rejects(rpc('lectra_join',[editInvite]),/INVITE_UNAVAILABLE/);
+  await assert.rejects(rpc('lectra_create',[book]),/ACCESS_DENIED/);
+  await as(owner);await rpc('lectra_revoke',[book,editor]);const cancelled=await rpc('lectra_invite',[book,'reader']);await rpc('lectra_cancel_invite',[cancelled]);
+  await as(editor);assert.equal((await db.query('select * from public.lectra_books')).rows.length,0);assert.equal((await db.query('select * from storage.objects')).rows.length,0);
+  await assert.rejects(rpc('lectra_join',[editInvite]),/INVITE_UNAVAILABLE/);await assert.rejects(rpc('lectra_join',[cancelled]),/INVITE_UNAVAILABLE/);
+  await as(owner);const expired=await rpc('lectra_invite',[book,'reader']);
+  await db.exec('reset role');await db.query("update public.lectra_invites set expires_at=now()-interval '1 second' where token=$1",[expired]);
+  await as(stranger);await assert.rejects(rpc('lectra_join',[expired]),/INVITE_UNAVAILABLE/);
+  await as(null);await assert.rejects(db.query('select * from public.lectra_books'));await assert.rejects(rpc('lectra_create',[other]));
+  console.log('PASS: owner/editor/reader/stranger/anonymous access, immutable files, conflicts, retries, invitation reuse and revocation');
+ }finally{await db.close()}
+})().catch(error=>{console.error(error);process.exitCode=1});
